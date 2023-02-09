@@ -1,2 +1,9 @@
-package com.durgesh.repo;public class CustomerRepo {
+package com.durgesh.repo;
+
+import com.durgesh.entity.Customer;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface CustomerRepo  extends JpaRepository<Customer,Long> {
 }

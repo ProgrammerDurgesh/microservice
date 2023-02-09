@@ -1,2 +1,9 @@
-package com.durgesh.repo;public class AddressRepo {
+package com.durgesh.repo;
+
+import com.durgesh.entity.Address;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface AddressRepo extends JpaRepository<Address,Long> {
 }
