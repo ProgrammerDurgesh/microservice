@@ -23,8 +23,8 @@ public class EmployeeController extends CustomResponse {
 
     @GetMapping("/employee")
     public String home() {
-        String address = restTemplate.getForObject("http://127.0.0.1:8001/address", String.class);
-        return "this is employee  " + address;
+        //String address = restTemplate.getForObject("http://127.0.0.1:8001/address", String.class);
+        return "this is employee  " ;
     }
 
     @PostMapping("save")
