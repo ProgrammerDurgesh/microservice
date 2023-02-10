@@ -1,0 +1,17 @@
+
+
+Different Type of Web Client
+RestTemplate
+WebClient
+FeignClient
+
+Load Balancer
+Ribbon :
+if we are use ribbon load balancer then use oxt-on version dependency because spring cloud are remove(Deprecated)
+this load Balancer and change Java Version less than 8 & use spring boot version 2.3... series
+
+Load Balancer
+
+
+
+
