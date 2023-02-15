@@ -13,5 +13,25 @@ this load Balancer and change Java Version less than 8 & use spring boot version
 Load Balancer
 
 
+Discovery
+1 Client Side Discovery
+libraries to implement the client side discovery
+ 1 -Netflix Eureka
+ 2 -Zookeeper
+ 3 -Consul
+2 Server Side Discovery
+ 1 -NGNIX
+ 2 - AWS ELB
+ 3 -
+
+
+
+
+
+
+2 Server Side Discovery
+
+
+
 
 

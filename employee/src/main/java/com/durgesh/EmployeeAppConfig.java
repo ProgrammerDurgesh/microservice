@@ -11,8 +11,15 @@ public class EmployeeAppConfig {
 	public RestTemplate restTemplate() {
 		return new RestTemplate();
 	}
+
 	@Bean
 	public ModelMapper mapper() {
 		return new ModelMapper();
 	}
+
+	/*
+	 * @Bean public WebClientAutoConfiguration autoConfiguration() { return new
+	 * WebClientAutoConfiguration(); }
+	 */
+
 }

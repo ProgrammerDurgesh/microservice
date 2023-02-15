@@ -15,7 +15,9 @@ import java.util.List;
 @RestController
 @RequestMapping("/employee")
 public class EmployeeController extends CustomResponse {
-    @Autowired
+    private static final long serialVersionUID = 1L;
+
+	@Autowired
     private RestTemplate restTemplate;
 
     @Autowired
