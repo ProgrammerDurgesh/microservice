@@ -26,6 +26,13 @@ public class DynamicPackageGeneratorService {
      * @param jsonData The JSON string containing payment processor details and API definitions.
      * @return A map indicating the success status, message, and details of generated files.
      */
+    /**
+     * Generates dynamic Java packages and classes based on the provided JSON data.
+     * The structure follows: com.durgesh.generated.<paymentProcessorName.toLowerCase()>.dto
+     *
+     * @param jsonData The JSON string containing payment processor details and API definitions.
+     * @return A map indicating the success status, message, and details of generated files.
+     */
     public Map<String, Object> generatePackageAndClasses(String jsonData) {
         Map<String, Object> result = new HashMap<>();
         List<String> generatedFiles = new ArrayList<>();
@@ -37,9 +44,43 @@ public class DynamicPackageGeneratorService {
             // Parse JSON input
             JsonNode rootNode = objectMapper.readTree(jsonData);
 
+            // Validate required fields with proper null checks
+            JsonNode paymentProcessorNode = rootNode.get("PaymentProcessorName");
+            JsonNode typeNode = rootNode.get("type");
+
+            if (paymentProcessorNode == null || paymentProcessorNode.isNull() || paymentProcessorNode.asText().trim().isEmpty()) {
+                result.put("success", false);
+                result.put("message", "Error: 'PaymentProcessorName' field is required and cannot be null or empty");
+                result.put("error", "MissingRequiredField");
+                return result;
+            }
+
+            if (typeNode == null || typeNode.isNull() || typeNode.asText().trim().isEmpty()) {
+                result.put("success", false);
+                result.put("message", "Error: 'type' field is required and cannot be null or empty");
+                result.put("error", "MissingRequiredField");
+                return result;
+            }
+
             // Extract core details for package and class naming
-            String paymentProcessorName = rootNode.get("PaymentProcessorName").asText();
-            String type = rootNode.get("type").asText();
+            String paymentProcessorName = paymentProcessorNode.asText().trim();
+            String type = typeNode.asText().trim();
+
+            // Validate that the names are valid for Java package/class names
+            if (!isValidJavaIdentifier(paymentProcessorName)) {
+                result.put("success", false);
+                result.put("message", "Error: 'PaymentProcessorName' contains invalid characters for Java package naming: " + paymentProcessorName);
+                result.put("error", "InvalidIdentifier");
+                return result;
+            }
+
+            if (!isValidJavaIdentifier(type)) {
+                result.put("success", false);
+                result.put("message", "Error: 'type' contains invalid characters for Java class naming: " + type);
+                result.put("error", "InvalidIdentifier");
+                return result;
+            }
+
             String packageName = paymentProcessorName.toLowerCase(); // e.g., "new", "stripeprocessor"
             String fullPackageName = BASE_PACKAGE + "." + packageName; // e.g., "com.durgesh.generated.new"
 
@@ -50,14 +91,26 @@ public class DynamicPackageGeneratorService {
             String packagePath = BASE_PATH + "/" + packageName; // e.g., "src/main/java/com/durgesh/generated/new"
             File packageDir = new File(packagePath);
             if (!packageDir.exists()) {
-                packageDir.mkdirs(); // Create main package directory
+                boolean created = packageDir.mkdirs(); // Create main package directory
+                if (!created) {
+                    result.put("success", false);
+                    result.put("message", "Error: Failed to create package directory: " + packagePath);
+                    result.put("error", "DirectoryCreationFailed");
+                    return result;
+                }
             }
 
             // Construct DTO sub-package directory path
             String dtoPackagePath = packagePath + "/dto"; // e.g., "src/main/java/com/durgesh/generated/new/dto"
             File dtoPackageDir = new File(dtoPackagePath);
             if (!dtoPackageDir.exists()) {
-                dtoPackageDir.mkdirs(); // Create DTO sub-package directory
+                boolean created = dtoPackageDir.mkdirs(); // Create DTO sub-package directory
+                if (!created) {
+                    result.put("success", false);
+                    result.put("message", "Error: Failed to create DTO package directory: " + dtoPackagePath);
+                    result.put("error", "DirectoryCreationFailed");
+                    return result;
+                }
             }
 
             // Generate the main service class (e.g., NewV1.java)
@@ -69,32 +122,50 @@ public class DynamicPackageGeneratorService {
             JsonNode dataArray = rootNode.get("data");
             Set<String> generatedRequestBodies = new HashSet<>(); // Track generated DTOs to avoid duplicates
 
-            for (JsonNode dataNode : dataArray) {
-                JsonNode apiNode = dataNode.get("api");
-                String apiName = apiNode.get("name").asText();
-                JsonNode requestBodyRawNode = apiNode.get("requestBody"); // Raw requestBody node
-
-                JsonNode requestBodyForClassGeneration;
-                if (requestBodyRawNode != null && requestBodyRawNode.isObject()) {
-                    requestBodyForClassGeneration = requestBodyRawNode;
-                } else if (requestBodyRawNode != null && requestBodyRawNode.isTextual()) {
-                    try {
-                        // Attempt to parse string as JSON, if it fails, treat as plain string
-                        requestBodyForClassGeneration = objectMapper.readTree(requestBodyRawNode.asText());
-                    } catch (IOException e) {
-                        requestBodyForClassGeneration = null; // Not a valid JSON object string
+            if (dataArray != null && dataArray.isArray()) {
+                for (JsonNode dataNode : dataArray) {
+                    if (dataNode == null || dataNode.isNull()) {
+                        continue; // Skip null data nodes
                     }
-                } else {
-                    requestBodyForClassGeneration = null; // No valid request body for structured class
-                }
 
-                String requestBodyClassName = formatClassName(apiName);
-                if (!generatedRequestBodies.contains(requestBodyClassName)) {
-                    // Generate the request body DTO class
-                    generateRequestBodyClass(dtoPackagePath, dtoPackageName, requestBodyClassName, requestBodyForClassGeneration);
-                    generatedFiles.add("dto/" + requestBodyClassName + ".java");
-                    generatedRequestBodies.add(requestBodyClassName);
+                    JsonNode apiNode = dataNode.get("api");
+                    if (apiNode == null || apiNode.isNull()) {
+                        continue; // Skip if api node is missing
+                    }
+
+                    JsonNode apiNameNode = apiNode.get("name");
+                    if (apiNameNode == null || apiNameNode.isNull() || apiNameNode.asText().trim().isEmpty()) {
+                        continue; // Skip if API name is missing
+                    }
+
+                    String apiName = apiNameNode.asText().trim();
+                    JsonNode requestBodyRawNode = apiNode.get("requestBody"); // Raw requestBody node
+
+                    JsonNode requestBodyForClassGeneration;
+                    if (requestBodyRawNode != null && requestBodyRawNode.isObject()) {
+                        requestBodyForClassGeneration = requestBodyRawNode;
+                    } else if (requestBodyRawNode != null && requestBodyRawNode.isTextual()) {
+                        try {
+                            // Attempt to parse string as JSON, if it fails, treat as plain string
+                            requestBodyForClassGeneration = objectMapper.readTree(requestBodyRawNode.asText());
+                        } catch (IOException e) {
+                            requestBodyForClassGeneration = null; // Not a valid JSON object string
+                        }
+                    } else {
+                        requestBodyForClassGeneration = null; // No valid request body for structured class
+                    }
+
+                    String requestBodyClassName = formatClassName(apiName);
+                    if (!generatedRequestBodies.contains(requestBodyClassName)) {
+                        // Generate the request body DTO class
+                        generateRequestBodyClass(dtoPackagePath, dtoPackageName, requestBodyClassName, requestBodyForClassGeneration);
+                        generatedFiles.add("dto/" + requestBodyClassName + ".java");
+                        generatedRequestBodies.add(requestBodyClassName);
+                    }
                 }
+            } else {
+                // If data array is missing, still proceed but log a warning
+                System.out.println("Warning: 'data' array is missing or not an array in the JSON input. Only main class will be generated.");
             }
 
             result.put("success", true);
@@ -106,6 +177,11 @@ public class DynamicPackageGeneratorService {
             result.put("mainClass", mainClassName);
             result.put("generatedFiles", generatedFiles);
 
+        } catch (IOException e) {
+            result.put("success", false);
+            result.put("message", "Error parsing JSON input: " + e.getMessage());
+            result.put("error", "JSONParsingError");
+            e.printStackTrace();
         } catch (Exception e) {
             result.put("success", false);
             result.put("message", "Error generating package: " + e.getMessage());
@@ -117,6 +193,35 @@ public class DynamicPackageGeneratorService {
     }
 
     /**
+     * Validates if a string is a valid Java identifier for package/class naming.
+     * Removes common special characters and checks basic validity.
+     *
+     * @param identifier The string to validate
+     * @return true if the identifier is valid for Java naming
+     */
+    private boolean isValidJavaIdentifier(String identifier) {
+        if (identifier == null || identifier.trim().isEmpty()) {
+            return false;
+        }
+
+        // Remove common special characters and spaces, convert to valid format
+        String cleaned = identifier.replaceAll("[^a-zA-Z0-9]", "");
+
+        // Check if after cleaning we have something left
+        if (cleaned.isEmpty()) {
+            return false;
+        }
+
+        // Java identifiers cannot start with a digit
+        if (Character.isDigit(cleaned.charAt(0))) {
+            return false;
+        }
+
+        // Check if it's a valid Java identifier
+        return Character.isJavaIdentifierStart(cleaned.charAt(0)) &&
+                cleaned.chars().skip(1).allMatch(Character::isJavaIdentifierPart);
+    }
+    /**
      * Generates the main service class for the payment processor.
      * This class will contain the business logic for making API calls.
      *
@@ -127,152 +232,119 @@ public class DynamicPackageGeneratorService {
      * @param rootNode         The root JSON node for extracting authentication and API details.
      * @throws IOException if an I/O error occurs writing the file.
      */
-    private void generateMainClass(String packagePath, String fullPackageName, String dtoPackageName, String className, JsonNode rootNode) throws IOException {
+    private void generateMainClass(String packagePath, String fullPackageName, String dtoPackageName,
+                                   String className, JsonNode rootNode) throws IOException {
         StringBuilder classContent = new StringBuilder();
+
+        // Extract payment processor details for interface implementation
+        String paymentProcessorName = rootNode.get("PaymentProcessorName").asText().trim();
+        String type = rootNode.get("type").asText().trim();
 
         // Package declaration and imports
         classContent.append("package ").append(fullPackageName).append(";\n\n");
         classContent.append("import org.springframework.beans.factory.annotation.Autowired;\n");
         classContent.append("import org.springframework.stereotype.Service;\n");
         classContent.append("import org.springframework.web.client.RestTemplate;\n");
-        classContent.append("import org.springframework.http.HttpHeaders;\n"); // Specific import for HttpHeaders
-        classContent.append("import org.springframework.http.MediaType;\n");   // Specific import for MediaType
-        classContent.append("import org.springframework.http.HttpEntity;\n");  // Specific import for HttpEntity
-        classContent.append("import org.springframework.http.ResponseEntity;\n"); // Specific import for ResponseEntity
-        classContent.append("import org.springframework.http.HttpMethod;\n");  // Specific import for HttpMethod
+        classContent.append("import org.springframework.http.HttpHeaders;\n");
+        classContent.append("import org.springframework.http.MediaType;\n");
+        classContent.append("import org.springframework.http.HttpEntity;\n");
+        classContent.append("import org.springframework.http.ResponseEntity;\n");
+        classContent.append("import org.springframework.http.HttpMethod;\n");
         classContent.append("import com.fasterxml.jackson.databind.ObjectMapper;\n");
         classContent.append("import com.fasterxml.jackson.core.JsonProcessingException;\n");
-        classContent.append("import ").append(dtoPackageName).append(".*;\n"); // Import all DTOs
+        classContent.append("import com.durgesh.service.PaymentProcessor;\n");
+        classContent.append("import ").append(dtoPackageName).append(".*;\n");
         classContent.append("import java.util.*;\n\n");
 
+        // Class declaration with PaymentProcessor interface implementation
         classContent.append("@Service\n");
-        classContent.append("public class ").append(className).append(" {\n\n");
+        classContent.append("public class ").append(className).append(" implements PaymentProcessor {\n\n");
 
+        // Instance variables
         classContent.append("    @Autowired\n");
         classContent.append("    private RestTemplate restTemplate;\n\n");
-
-        classContent.append("    private final ObjectMapper objectMapper = new ObjectMapper();\n\n");
+        classContent.append("    private final ObjectMapper objectMapper = new ObjectMapper();\n");
+        classContent.append("    private final String PROCESSOR_NAME = \"").append(paymentProcessorName).append("\";\n");
+        classContent.append("    private final String PROCESSOR_TYPE = \"").append(type).append("\";\n");
 
         // Add AUTH_TOKEN field if 'auth' array is present in JSON
         JsonNode authArray = rootNode.get("auth");
         String authTokenValue = null;
         if (authArray != null && authArray.isArray() && authArray.size() > 0) {
             authTokenValue = authArray.get(0).asText();
-            classContent.append("    private final String AUTH_TOKEN = \"").append(authTokenValue).append("\";\n\n");
+            classContent.append("    private final String AUTH_TOKEN = \"").append(authTokenValue).append("\";\n");
         }
+        classContent.append("\n");
 
-        // Generate the main 'processPayment' method
-        classContent.append("    /**\n");
-        classContent.append("     * Orchestrates payment processing by calling various APIs defined in the configuration.\n");
-        classContent.append("     * @param paymentData A map containing dynamic data needed for API calls (e.g., customerId, amount).\n");
-        classContent.append("     * @return A map with results from each API call.\n");
-        classContent.append("     */\n");
-        classContent.append("    public Map<String, Object> processPayment(Map<String, Object> paymentData) {\n");
-        classContent.append("        Map<String, Object> result = new HashMap<>();\n");
-        classContent.append("        try {\n");
+        // ========== PAYMENTPROCESSOR INTERFACE METHOD OVERRIDES ==========
 
-        JsonNode dataArray = rootNode.get("data");
-        if (dataArray != null && dataArray.isArray()) {
-            for (JsonNode dataNode : dataArray) {
-                JsonNode apiNode = dataNode.get("api");
-                String apiName = apiNode.get("name").asText();
-                String method = apiNode.get("method").asText();
-                String endpoint = apiNode.get("endpoint").asText();
-                String baseUrl = apiNode.get("baseUrl").asText();
-                String fullUrl = baseUrl + endpoint;
-
-                JsonNode requestBodyRawNode = apiNode.get("requestBody");
-                String requestBodyClassName = formatClassName(apiName);
-                String camelCaseApiName = toCamelCase(apiName);
-
-                if (requestBodyRawNode != null && requestBodyRawNode.isObject()) {
-                    // Scenario: Request body is a structured JSON object
-                    classContent.append("            // --- API Call: ").append(apiName).append(" ---\n");
-                    classContent.append("            ").append(dtoPackageName).append(".").append(requestBodyClassName).append(" ").append(camelCaseApiName).append("Request = new ").append(dtoPackageName).append(".").append(requestBodyClassName).append("();\n");
-                    classContent.append("            // TODO: Populate ").append(camelCaseApiName).append("Request with data from 'paymentData' or previous step results.\n");
-                    classContent.append("            // Example: ").append(camelCaseApiName).append("Request.setSomeField(paymentData.get(\"someKey\").toString());\n");
-                    classContent.append("            String ").append(camelCaseApiName).append("Json = objectMapper.writeValueAsString(").append(camelCaseApiName).append("Request);\n");
-                    classContent.append("            HttpEntity<String> ").append(camelCaseApiName).append("Entity = new HttpEntity<>(").append(camelCaseApiName).append("Json, createHeaders());\n");
-                    classContent.append("            ResponseEntity<String> ").append(camelCaseApiName).append("Response = restTemplate.exchange(\n");
-                    classContent.append("                \"").append(fullUrl).append("\",\n");
-                    classContent.append("                HttpMethod.").append(method.toUpperCase()).append(",\n");
-                    classContent.append("                ").append(camelCaseApiName).append("Entity,\n");
-                    classContent.append("                String.class\n");
-                    classContent.append("            );\n");
-                    classContent.append("            result.put(\"").append(camelCaseApiName).append("Status\", ").append(camelCaseApiName).append("Response.getStatusCode().value());\n");
-                    classContent.append("            result.put(\"").append(camelCaseApiName).append("Body\", ").append(camelCaseApiName).append("Response.getBody());\n");
-                    classContent.append("\n");
-
-                } else if (requestBodyRawNode != null && requestBodyRawNode.isTextual()) {
-                    // Scenario: Request body is a literal string (could be JSON string or plain text)
-                    String literalRequestBody = requestBodyRawNode.asText().replace("\"", "\\\""); // Escape quotes for string literal
-                    classContent.append("            // --- API Call: ").append(apiName).append(" (Literal String Request Body) ---\n");
-                    classContent.append("            String ").append(camelCaseApiName).append("LiteralRequestBody = \"").append(literalRequestBody).append("\";\n");
-                    classContent.append("            HttpEntity<String> ").append(camelCaseApiName).append("Entity = new HttpEntity<>(").append(camelCaseApiName).append("LiteralRequestBody, createHeaders());\n");
-                    classContent.append("            ResponseEntity<String> ").append(camelCaseApiName).append("Response = restTemplate.exchange(\n");
-                    classContent.append("                \"").append(fullUrl).append("\",\n");
-                    classContent.append("                HttpMethod.").append(method.toUpperCase()).append(",\n");
-                    classContent.append("                ").append(camelCaseApiName).append("Entity,\n");
-                    classContent.append("                String.class\n");
-                    classContent.append("            );\n");
-                    classContent.append("            result.put(\"").append(camelCaseApiName).append("Status\", ").append(camelCaseApiName).append("Response.getStatusCode().value());\n");
-                    classContent.append("            result.put(\"").append(camelCaseApiName).append("Body\", ").append(camelCaseApiName).append("Response.getBody());\n");
-                    classContent.append("\n");
-
-                    if (literalRequestBody.contains("{{") && literalRequestBody.contains("}}")) {
-                        classContent.append("            // Note: The request body for this step (`").append(apiName).append("`) contains placeholders like `{{CUSTOMER_ID_FROM_PREVIOUS_STEP}}`.\n");
-                        classContent.append("            // You will need to implement logic here to replace these placeholders with actual values\n");
-                        classContent.append("            // obtained from previous API responses or `paymentData` before making the call.\n\n");
-                    }
-
-                } else {
-                    // Scenario: No specific request body defined or it's not an object/string
-                    classContent.append("            // --- API Call: ").append(apiName).append(" (No Request Body) ---\n");
-                    classContent.append("            HttpEntity<String> ").append(camelCaseApiName).append("Entity = new HttpEntity<>(createHeaders());\n");
-                    classContent.append("            ResponseEntity<String> ").append(camelCaseApiName).append("Response = restTemplate.exchange(\n");
-                    classContent.append("                \"").append(fullUrl).append("\",\n");
-                    classContent.append("                HttpMethod.").append(method.toUpperCase()).append(",\n");
-                    classContent.append("                ").append(camelCaseApiName).append("Entity,\n");
-                    classContent.append("                String.class\n");
-                    classContent.append("            );\n");
-                    classContent.append("            result.put(\"").append(camelCaseApiName).append("Status\", ").append(camelCaseApiName).append("Response.getStatusCode().value());\n");
-                    classContent.append("            result.put(\"").append(camelCaseApiName).append("Body\", ").append(camelCaseApiName).append("Response.getBody());\n");
-                    classContent.append("\n");
-                }
-            }
-        }
-
-        classContent.append("            result.put(\"success\", true);\n");
-        classContent.append("            result.put(\"message\", \"Payment processing logic executed. Check individual API results for details.\");\n");
-        classContent.append("        } catch (Exception e) {\n");
-        classContent.append("            result.put(\"success\", false);\n");
-        classContent.append("            result.put(\"message\", \"Payment processing failed: \" + e.getMessage());\n");
-        classContent.append("            e.printStackTrace();\n");
-        classContent.append("        }\n");
-        classContent.append("        return result;\n");
+        // 1. Override createPayload method
+        classContent.append("    @Override\n");
+        classContent.append("    public String createPayload() {\n");
+        classContent.append("        // TODO: Implement payload creation logic\n");
+        classContent.append("        return \"\";\n");
         classContent.append("    }\n\n");
 
-        // Moved createHeaders() method inside the generated main class
-        classContent.append("    /**\n");
-        classContent.append("     * Creates and configures HttpHeaders for API requests.\n");
-        classContent.append("     * Includes Content-Type as application/json and Authorization header if AUTH_TOKEN is present.\n");
-        classContent.append("     * @return Configured HttpHeaders instance.\n");
-        classContent.append("     */\n");
-        classContent.append("    private HttpHeaders createHeaders() {\n");
-        classContent.append("        HttpHeaders headers = new HttpHeaders();\n"); // Initialize HttpHeaders
-        classContent.append("        headers.setContentType(MediaType.APPLICATION_JSON);\n");
-        if (authTokenValue != null) { // Only add Authorization header if AUTH_TOKEN was actually found in JSON
-            classContent.append("        headers.set(\"Authorization\", \"Bearer \" + AUTH_TOKEN);\n");
-        }
-        classContent.append("        return headers;\n");
-        classContent.append("    }\n");
+        // 2. Override createRequest method
+        classContent.append("    @Override\n");
+        classContent.append("    public void createRequest() {\n");
+        classContent.append("        // TODO: Implement request creation logic\n");
+        classContent.append("    }\n\n");
 
+        // 3. Override checkStatus method
+        classContent.append("    @Override\n");
+        classContent.append("    public void checkStatus() {\n");
+        classContent.append("        // TODO: Implement status check logic\n");
+        classContent.append("    }\n\n");
+
+        // 4. Override executeWebhook method
+        classContent.append("    @Override\n");
+        classContent.append("    public ResponseEntity<?> executeWebhook() {\n");
+        classContent.append("        // TODO: Implement webhook execution logic\n");
+        classContent.append("        return null;\n");
+        classContent.append("    }\n\n");
+
+        // 5. Override getTimeoutMsg method
+        classContent.append("    @Override\n");
+        classContent.append("    public void getTimeoutMsg() {\n");
+        classContent.append("        // TODO: Implement timeout message logic\n");
+        classContent.append("    }\n\n");
+
+        // 6. Override createResponseEntity method
+        classContent.append("    @Override\n");
+        classContent.append("    public ResponseEntity<?> createResponseEntity() {\n");
+        classContent.append("        // TODO: Implement response entity creation logic\n");
+        classContent.append("        return null;\n");
+        classContent.append("    }\n\n");
+
+        // 7. Override getOrderId method
+        classContent.append("    @Override\n");
+        classContent.append("    public String getOrderId() {\n");
+        classContent.append("        // TODO: Implement order ID retrieval logic\n");
+        classContent.append("        return \"\";\n");
+        classContent.append("    }\n\n");
+
+        // 8. Override postRedirectAfterCustVerification method
+        classContent.append("    @Override\n");
+        classContent.append("    public ResponseEntity<?> postRedirectAfterCustVerification() {\n");
+        classContent.append("        // TODO: Implement post-redirect after customer verification logic\n");
+        classContent.append("        return null;\n");
+        classContent.append("    }\n\n");
+
+        // 9. Override threeDSVerify method
+        classContent.append("    @Override\n");
+        classContent.append("    public void threeDSVerify() {\n");
+        classContent.append("        // TODO: Implement 3DS verification logic\n");
+        classContent.append("    }\n\n");
+
+
+
+        // Close class
         classContent.append("}\n");
 
+        // Write the generated class to file
         writeToFile(packagePath + "/" + className + ".java", classContent.toString());
-    }
-
-    /**
+    } /**
      * Generates a request body DTO class. This can be a structured POJO based on a JSON object,
      * or a generic class if the request body is a plain string or null.
      *

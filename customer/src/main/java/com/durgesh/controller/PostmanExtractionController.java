@@ -48,7 +48,7 @@ public class PostmanExtractionController {
     @GetMapping("/extract")
     public ResponseEntity<Map<String, Object>> extractApis(/*@RequestParam("filePath") String filePath*/) {
         try {
-            String collectionFilePath = "C:\\Users\\Hii\\OneDrive\\Desktop\\newtask\\onvopay_API_Copy.postman_collection.json";
+            String collectionFilePath = "C:\\Users\\Hii\\OneDrive\\Desktop\\newtask\\X1_Collection.postman_collection.json";
             List<ApiInfo> apis = postmanService.extractApiNames(collectionFilePath);
 
             Map<String, Object> response = new HashMap<>();
