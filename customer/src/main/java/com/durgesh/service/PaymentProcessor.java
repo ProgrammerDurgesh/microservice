@@ -15,5 +15,5 @@ public interface PaymentProcessor {
     ResponseEntity<?> postRedirectAfterCustVerification();
     //ApiError threeDSVerify();
     void threeDSVerify();
-
+void ok();
 }

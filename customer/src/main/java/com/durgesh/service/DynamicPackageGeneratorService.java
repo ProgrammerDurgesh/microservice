@@ -2,13 +2,17 @@ package com.durgesh.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.util.*;
-
 @Service
 public class DynamicPackageGeneratorService {
 
@@ -232,6 +236,17 @@ public class DynamicPackageGeneratorService {
      * @param rootNode         The root JSON node for extracting authentication and API details.
      * @throws IOException if an I/O error occurs writing the file.
      */
+
+
+
+
+
+
+
+
+
+
+
     private void generateMainClass(String packagePath, String fullPackageName, String dtoPackageName,
                                    String className, JsonNode rootNode) throws IOException {
         StringBuilder classContent = new StringBuilder();
@@ -276,75 +291,323 @@ public class DynamicPackageGeneratorService {
         }
         classContent.append("\n");
 
-        // ========== PAYMENTPROCESSOR INTERFACE METHOD OVERRIDES ==========
+        // ========== DYNAMIC PAYMENTPROCESSOR INTERFACE METHOD IMPLEMENTATION ==========
+        try {
+            // Dynamically fetch PaymentProcessor interface
+            Class<?> paymentProcessorInterface = Class.forName("com.durgesh.service.PaymentProcessor");
 
-        // 1. Override createPayload method
-        classContent.append("    @Override\n");
-        classContent.append("    public String createPayload() {\n");
-        classContent.append("        // TODO: Implement payload creation logic\n");
-        classContent.append("        return \"\";\n");
-        classContent.append("    }\n\n");
+            // Get all methods from the interface
+            Method[] methods = paymentProcessorInterface.getDeclaredMethods();
 
-        // 2. Override createRequest method
-        classContent.append("    @Override\n");
-        classContent.append("    public void createRequest() {\n");
-        classContent.append("        // TODO: Implement request creation logic\n");
-        classContent.append("    }\n\n");
+            // Generate implementation for each method
+            for (Method method : methods) {
+                generateMethodImplementation(classContent, method);
+            }
 
-        // 3. Override checkStatus method
-        classContent.append("    @Override\n");
-        classContent.append("    public void checkStatus() {\n");
-        classContent.append("        // TODO: Implement status check logic\n");
-        classContent.append("    }\n\n");
-
-        // 4. Override executeWebhook method
-        classContent.append("    @Override\n");
-        classContent.append("    public ResponseEntity<?> executeWebhook() {\n");
-        classContent.append("        // TODO: Implement webhook execution logic\n");
-        classContent.append("        return null;\n");
-        classContent.append("    }\n\n");
-
-        // 5. Override getTimeoutMsg method
-        classContent.append("    @Override\n");
-        classContent.append("    public void getTimeoutMsg() {\n");
-        classContent.append("        // TODO: Implement timeout message logic\n");
-        classContent.append("    }\n\n");
-
-        // 6. Override createResponseEntity method
-        classContent.append("    @Override\n");
-        classContent.append("    public ResponseEntity<?> createResponseEntity() {\n");
-        classContent.append("        // TODO: Implement response entity creation logic\n");
-        classContent.append("        return null;\n");
-        classContent.append("    }\n\n");
-
-        // 7. Override getOrderId method
-        classContent.append("    @Override\n");
-        classContent.append("    public String getOrderId() {\n");
-        classContent.append("        // TODO: Implement order ID retrieval logic\n");
-        classContent.append("        return \"\";\n");
-        classContent.append("    }\n\n");
-
-        // 8. Override postRedirectAfterCustVerification method
-        classContent.append("    @Override\n");
-        classContent.append("    public ResponseEntity<?> postRedirectAfterCustVerification() {\n");
-        classContent.append("        // TODO: Implement post-redirect after customer verification logic\n");
-        classContent.append("        return null;\n");
-        classContent.append("    }\n\n");
-
-        // 9. Override threeDSVerify method
-        classContent.append("    @Override\n");
-        classContent.append("    public void threeDSVerify() {\n");
-        classContent.append("        // TODO: Implement 3DS verification logic\n");
-        classContent.append("    }\n\n");
-
-
+        } catch (ClassNotFoundException e) {
+            System.err.println("PaymentProcessor interface not found: " + e.getMessage());
+            // Fallback to hardcoded methods if interface is not available
+            generateFallbackMethods(classContent);
+        }
 
         // Close class
         classContent.append("}\n");
 
         // Write the generated class to file
         writeToFile(packagePath + "/" + className + ".java", classContent.toString());
-    } /**
+    }
+
+    /**
+     * Dynamically generates method implementation based on the method signature
+     */
+    private void generateMethodImplementation(StringBuilder classContent, Method method) {
+        String methodName = method.getName();
+        String returnType = getReturnTypeString(method.getReturnType(), method.getGenericReturnType());
+        Parameter[] parameters = method.getParameters();
+
+        // Method signature
+        classContent.append("    @Override\n");
+        classContent.append("    public ").append(returnType).append(" ").append(methodName).append("(");
+
+        // Parameters
+        for (int i = 0; i < parameters.length; i++) {
+            Parameter param = parameters[i];
+            String paramType = getParameterTypeString(param.getType(), param.getParameterizedType());
+            String paramName = param.getName();
+
+            classContent.append(paramType).append(" ").append(paramName);
+            if (i < parameters.length - 1) {
+                classContent.append(", ");
+            }
+        }
+        classContent.append(") {\n");
+
+        // Method body based on method name and return type
+        generateMethodBody(classContent, methodName, method.getReturnType(), parameters);
+
+        classContent.append("    }\n\n");
+    }
+
+    /**
+     * Generates appropriate method body based on method characteristics
+     */
+    private void generateMethodBody(StringBuilder classContent, String methodName, Class<?> returnType, Parameter[] parameters) {
+        // Add method-specific logic based on method name
+        switch (methodName.toLowerCase()) {
+            case "createpayload":
+                classContent.append("        // Create payload for ").append(methodName).append("\n");
+                classContent.append("        try {\n");
+                classContent.append("            Map<String, Object> payload = new HashMap<>();\n");
+                classContent.append("            payload.put(\"processorName\", PROCESSOR_NAME);\n");
+                classContent.append("            payload.put(\"processorType\", PROCESSOR_TYPE);\n");
+                classContent.append("            // Add more payload fields as needed\n");
+                classContent.append("            return objectMapper.writeValueAsString(payload);\n");
+                classContent.append("        } catch (JsonProcessingException e) {\n");
+                classContent.append("            throw new RuntimeException(\"Error creating payload\", e);\n");
+                classContent.append("        }\n");
+                break;
+
+            case "createrequest":
+                classContent.append("        // Create HTTP request for ").append(methodName).append("\n");
+                classContent.append("        HttpHeaders headers = new HttpHeaders();\n");
+                classContent.append("        headers.setContentType(MediaType.APPLICATION_JSON);\n");
+                if (hasAuthToken()) {
+                    classContent.append("        headers.setBearerAuth(AUTH_TOKEN);\n");
+                }
+                classContent.append("        // TODO: Implement request creation logic\n");
+                classContent.append("        // HttpEntity<String> request = new HttpEntity<>(payload, headers);\n");
+                break;
+
+            case "checkstatus":
+                classContent.append("        // Check payment status for ").append(methodName).append("\n");
+                classContent.append("        try {\n");
+                classContent.append("            // TODO: Implement status check logic\n");
+                classContent.append("            // ResponseEntity<String> response = restTemplate.exchange(statusUrl, HttpMethod.GET, entity, String.class);\n");
+                classContent.append("        } catch (Exception e) {\n");
+                classContent.append("            throw new RuntimeException(\"Error checking status\", e);\n");
+                classContent.append("        }\n");
+                break;
+
+            case "executewebhook":
+                classContent.append("        // Execute webhook for ").append(methodName).append("\n");
+                classContent.append("        try {\n");
+                classContent.append("            // TODO: Implement webhook execution logic\n");
+                classContent.append("            Map<String, Object> webhookResponse = new HashMap<>();\n");
+                classContent.append("            webhookResponse.put(\"status\", \"processed\");\n");
+                classContent.append("            webhookResponse.put(\"processor\", PROCESSOR_NAME);\n");
+                classContent.append("            return ResponseEntity.ok(webhookResponse);\n");
+                classContent.append("        } catch (Exception e) {\n");
+                classContent.append("            return ResponseEntity.internalServerError().body(\"Webhook execution failed\");\n");
+                classContent.append("        }\n");
+                break;
+
+            case "gettimeoutmsg":
+                classContent.append("        // Get timeout message for ").append(methodName).append("\n");
+                classContent.append("        // TODO: Implement timeout message logic\n");
+                classContent.append("        System.out.println(\"Payment timeout occurred for processor: \" + PROCESSOR_NAME);\n");
+                break;
+
+            case "createresponseentity":
+                classContent.append("        // Create response entity for ").append(methodName).append("\n");
+                classContent.append("        try {\n");
+                classContent.append("            Map<String, Object> response = new HashMap<>();\n");
+                classContent.append("            response.put(\"processorName\", PROCESSOR_NAME);\n");
+                classContent.append("            response.put(\"processorType\", PROCESSOR_TYPE);\n");
+                classContent.append("            response.put(\"timestamp\", System.currentTimeMillis());\n");
+                classContent.append("            // TODO: Add more response fields\n");
+                classContent.append("            return ResponseEntity.ok(response);\n");
+                classContent.append("        } catch (Exception e) {\n");
+                classContent.append("            return ResponseEntity.internalServerError().body(\"Error creating response\");\n");
+                classContent.append("        }\n");
+                break;
+
+            case "getorderid":
+                classContent.append("        // Get order ID for ").append(methodName).append("\n");
+                classContent.append("        // TODO: Implement order ID retrieval logic\n");
+                classContent.append("        return \"ORDER_\" + System.currentTimeMillis(); // Placeholder\n");
+                break;
+
+            case "postredirectaftercustverification":
+                classContent.append("        // Post redirect after customer verification for ").append(methodName).append("\n");
+                classContent.append("        try {\n");
+                classContent.append("            // TODO: Implement post-redirect logic\n");
+                classContent.append("            Map<String, Object> redirectResponse = new HashMap<>();\n");
+                classContent.append("            redirectResponse.put(\"verified\", true);\n");
+                classContent.append("            redirectResponse.put(\"redirectUrl\", \"/payment/success\");\n");
+                classContent.append("            return ResponseEntity.ok(redirectResponse);\n");
+                classContent.append("        } catch (Exception e) {\n");
+                classContent.append("            return ResponseEntity.internalServerError().body(\"Verification failed\");\n");
+                classContent.append("        }\n");
+                break;
+
+            case "threedsverify":
+                classContent.append("        // 3DS verification for ").append(methodName).append("\n");
+                classContent.append("        try {\n");
+                classContent.append("            // TODO: Implement 3DS verification logic\n");
+                classContent.append("            System.out.println(\"Performing 3DS verification for processor: \" + PROCESSOR_NAME);\n");
+                classContent.append("        } catch (Exception e) {\n");
+                classContent.append("            throw new RuntimeException(\"3DS verification failed\", e);\n");
+                classContent.append("        }\n");
+                break;
+
+            default:
+                // Generic implementation for unknown methods
+                classContent.append("        // TODO: Implement ").append(methodName).append(" logic\n");
+                if (returnType != void.class && returnType != Void.class) {
+                    if (returnType == String.class) {
+                        classContent.append("        return \"\"; // TODO: Return appropriate value\n");
+                    } else if (returnType == ResponseEntity.class) {
+                        classContent.append("        return ResponseEntity.ok(\"TODO: Implement response\"); // TODO: Return appropriate ResponseEntity\n");
+                    } else if (returnType == boolean.class || returnType == Boolean.class) {
+                        classContent.append("        return false; // TODO: Return appropriate boolean value\n");
+                    } else if (returnType == int.class || returnType == Integer.class) {
+                        classContent.append("        return 0; // TODO: Return appropriate integer value\n");
+                    } else if (returnType == long.class || returnType == Long.class) {
+                        classContent.append("        return 0L; // TODO: Return appropriate long value\n");
+                    } else if (returnType == double.class || returnType == Double.class) {
+                        classContent.append("        return 0.0; // TODO: Return appropriate double value\n");
+                    } else if (returnType.isArray() || Collection.class.isAssignableFrom(returnType)) {
+                        classContent.append("        return null; // TODO: Return appropriate collection/array\n");
+                    } else {
+                        classContent.append("        return null; // TODO: Return appropriate ").append(returnType.getSimpleName()).append(" value\n");
+                    }
+                }
+                break;
+        }
+    }
+
+    /**
+     * Gets string representation of return type
+     */
+    private String getReturnTypeString(Class<?> returnType, Type genericReturnType) {
+        if (genericReturnType instanceof ParameterizedType) {
+            ParameterizedType paramType = (ParameterizedType) genericReturnType;
+            StringBuilder sb = new StringBuilder();
+            sb.append(returnType.getSimpleName()).append("<");
+            Type[] typeArgs = paramType.getActualTypeArguments();
+            for (int i = 0; i < typeArgs.length; i++) {
+                if (typeArgs[i] instanceof Class<?>) {
+                    sb.append(((Class<?>) typeArgs[i]).getSimpleName());
+                } else {
+                    sb.append("?");
+                }
+                if (i < typeArgs.length - 1) {
+                    sb.append(", ");
+                }
+            }
+            sb.append(">");
+            return sb.toString();
+        }
+        return returnType.getSimpleName();
+    }
+
+    /**
+     * Gets string representation of parameter type
+     */
+    private String getParameterTypeString(Class<?> paramType, Type genericParamType) {
+        if (genericParamType instanceof ParameterizedType) {
+            ParameterizedType parameterizedType = (ParameterizedType) genericParamType;
+            StringBuilder sb = new StringBuilder();
+            sb.append(paramType.getSimpleName()).append("<");
+            Type[] typeArgs = parameterizedType.getActualTypeArguments();
+            for (int i = 0; i < typeArgs.length; i++) {
+                if (typeArgs[i] instanceof Class<?>) {
+                    sb.append(((Class<?>) typeArgs[i]).getSimpleName());
+                } else {
+                    sb.append("?");
+                }
+                if (i < typeArgs.length - 1) {
+                    sb.append(", ");
+                }
+            }
+            sb.append(">");
+            return sb.toString();
+        }
+        return paramType.getSimpleName();
+    }
+
+    /**
+     * Checks if AUTH_TOKEN is available
+     */
+    private boolean hasAuthToken() {
+        // This would need to be passed as a parameter or made available through the class
+        // For now, returning true as a placeholder
+        return true; // You can modify this based on your auth token availability logic
+    }
+
+    /**
+     * Fallback method generation if PaymentProcessor interface is not available
+     */
+    private void generateFallbackMethods(StringBuilder classContent) {
+        // Your existing hardcoded methods as fallback
+        classContent.append("    @Override\n");
+        classContent.append("    public String createPayload() {\n");
+        classContent.append("        // TODO: Implement payload creation logic\n");
+        classContent.append("        return \"\";\n");
+        classContent.append("    }\n\n");
+
+        classContent.append("    @Override\n");
+        classContent.append("    public void createRequest() {\n");
+        classContent.append("        // TODO: Implement request creation logic\n");
+        classContent.append("    }\n\n");
+
+        classContent.append("    @Override\n");
+        classContent.append("    public void checkStatus() {\n");
+        classContent.append("        // TODO: Implement status check logic\n");
+        classContent.append("    }\n\n");
+
+        classContent.append("    @Override\n");
+        classContent.append("    public ResponseEntity<?> executeWebhook() {\n");
+        classContent.append("        // TODO: Implement webhook execution logic\n");
+        classContent.append("        return null;\n");
+        classContent.append("    }\n\n");
+
+        classContent.append("    @Override\n");
+        classContent.append("    public void getTimeoutMsg() {\n");
+        classContent.append("        // TODO: Implement timeout message logic\n");
+        classContent.append("    }\n\n");
+
+        classContent.append("    @Override\n");
+        classContent.append("    public ResponseEntity<?> createResponseEntity() {\n");
+        classContent.append("        // TODO: Implement response entity creation logic\n");
+        classContent.append("        return null;\n");
+        classContent.append("    }\n\n");
+
+        classContent.append("    @Override\n");
+        classContent.append("    public String getOrderId() {\n");
+        classContent.append("        // TODO: Implement order ID retrieval logic\n");
+        classContent.append("        return \"\";\n");
+        classContent.append("    }\n\n");
+
+        classContent.append("    @Override\n");
+        classContent.append("    public ResponseEntity<?> postRedirectAfterCustVerification() {\n");
+        classContent.append("        // TODO: Implement post-redirect after customer verification logic\n");
+        classContent.append("        return null;\n");
+        classContent.append("    }\n\n");
+
+        classContent.append("    @Override\n");
+        classContent.append("    public void threeDSVerify() {\n");
+        classContent.append("        // TODO: Implement 3DS verification logic\n");
+        classContent.append("    }\n\n");
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    /**
      * Generates a request body DTO class. This can be a structured POJO based on a JSON object,
      * or a generic class if the request body is a plain string or null.
      *
